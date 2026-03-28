@@ -18,3 +18,5 @@ releases:
       - environment: '{{ .Environment.Name }}'
         image:
           registry: '{{ env "ECR_REGISTRY" }}'
+        serviceAccount:
+          irsaRoleArn: '{{ env "IRSA_ROLE_ARN" }}'
