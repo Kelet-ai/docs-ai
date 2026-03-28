@@ -4,15 +4,13 @@
 #   ECR_REGISTRY        — ECR registry URL (e.g. 123456789.dkr.ecr.us-east-1.amazonaws.com)
 #   AWS_ROLE_TO_ASSUME  — IRSA role ARN for ECR push
 #   AWS_REGION          — AWS region (e.g. us-east-1)
-#   WRITEBACK_APP_ID    — GitHub App ID for write-back commits
-#   WRITEBACK_APP_KEY   — GitHub App private key for write-back commits
 
 name: Build and Push to ECR
 
 on:
   push:
     branches:
-      - main
+      - master
   workflow_dispatch:
 
 env:
@@ -177,13 +175,6 @@ jobs:
       contents: write
 
     steps:
-      - name: Setup GitHub Authentication
-        uses: actions/create-github-app-token@v2
-        id: github-auth
-        with:
-          app-id: ${{ secrets.WRITEBACK_APP_ID }}
-          private-key: ${{ secrets.WRITEBACK_APP_KEY }}
-
       - name: Setup yq
         uses: vegardit/gha-setup-yq@v1
 
@@ -191,7 +182,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: main
-          token: ${{ steps.github-auth.outputs.token }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update image tag and commit
         env:
