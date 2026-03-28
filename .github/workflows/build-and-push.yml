@@ -1,0 +1,233 @@
+# Sensitive values (ECR_REGISTRY, AWS_ROLE_TO_ASSUME) must be configured as GitHub Actions secrets — never hardcode AWS account IDs or registry URLs
+#
+# Required secrets:
+#   ECR_REGISTRY        — ECR registry URL (e.g. 123456789.dkr.ecr.us-east-1.amazonaws.com)
+#   AWS_ROLE_TO_ASSUME  — IRSA role ARN for ECR push
+#   AWS_REGION          — AWS region (e.g. us-east-1)
+#   WRITEBACK_APP_ID    — GitHub App ID for write-back commits
+#   WRITEBACK_APP_KEY   — GitHub App private key for write-back commits
+
+name: Build and Push to ECR
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  ECR_REPOSITORY: kelet-docs-ai
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Create dummy .env
+        run: |
+          if [ -f ".env.example" ]; then cp .env.example .env; fi
+
+      - name: Run tests
+        env:
+          LOGFIRE_SEND_TO_LOGFIRE: "false"
+          OTEL_SDK_DISABLED: "true"
+        run: |
+          # load env if present
+          if [ -f ".env" ]; then set -a; . .env; set +a; fi
+
+          # run tests
+          set +e
+          uv run pytest -n auto --junitxml=junit/test-results.xml
+          status=$?
+          if [ $status -eq 5 ]; then
+            echo "No tests collected. Creating empty reports."
+            mkdir -p junit
+            printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?><testsuite name="empty" tests="0"/>' > junit/test-results.xml
+            exit 0
+          elif [ $status -ne 0 ]; then
+            echo "Tests failed with exit code $status. Failing fast to prevent deployment."
+            exit $status
+          fi
+
+      - name: Publish Test Results
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: |
+            junit/**/*.xml
+            junit/**/*.trx
+            junit/**/*.json
+
+  build:
+    name: Build Image
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write  # Need this for AWS credentials
+      contents: read
+
+    outputs:
+      image_tag: ${{ steps.set-tag.outputs.image_tag }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Export Docker image
+        id: build-image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: false
+          platforms: linux/amd64
+          tags: |
+            ${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ env.ECR_REPOSITORY }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=docker,dest=/tmp/image.tar
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+
+      - name: Upload Docker image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image-kelet-docs-ai
+          path: /tmp/image.tar
+          retention-days: 1
+          compression-level: 6
+
+      - name: Set output
+        id: set-tag
+        run: echo "image_tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+  push:
+    name: Push Image to Registry
+    runs-on: ubuntu-latest
+    needs: [test, build]  # Wait for BOTH test and build to complete
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+
+    permissions:
+      id-token: write
+      contents: read
+
+    outputs:
+      pushed_tag: ${{ steps.push.outputs.pushed_tag }}
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image-kelet-docs-ai
+
+      - name: Load and push Docker image
+        id: push
+        env:
+          ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+        run: |
+          docker load --input image.tar
+          docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag $ECR_REPOSITORY:latest $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "pushed_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+
+  roll-version:
+    name: Roll Version
+    runs-on: ubuntu-latest
+    needs: push
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Setup GitHub Authentication
+        uses: actions/create-github-app-token@v2
+        id: github-auth
+        with:
+          app-id: ${{ secrets.WRITEBACK_APP_ID }}
+          private-key: ${{ secrets.WRITEBACK_APP_KEY }}
+
+      - name: Setup yq
+        uses: vegardit/gha-setup-yq@v1
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ steps.github-auth.outputs.token }}
+
+      - name: Update image tag and commit
+        env:
+          IMAGE_TAG: ${{ needs.push.outputs.pushed_tag }}
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          # Retry loop to handle concurrent pushes from other workflows
+          for attempt in 1 2 3 4 5; do
+            echo "Attempt $attempt/5"
+
+            # Pull latest changes before modifying
+            git pull --rebase origin main || true
+
+            # Apply the image tag update
+            yq eval ".docs_ai.image.tag = \"${IMAGE_TAG}\"" -i "k8s/environments/prod.yaml"
+            yq eval ".docs_ai.image.tag = \"${IMAGE_TAG}\"" -i "k8s/environments/stag.yaml"
+
+            if git diff --quiet "k8s/environments/"; then
+              echo "No changes to commit (already up to date)"
+              exit 0
+            fi
+
+            git add "k8s/environments/prod.yaml" "k8s/environments/stag.yaml"
+            git commit -m "chore(release/docs-ai): Update image tags to ${IMAGE_TAG} [skip ci]"
+
+            if git push; then
+              echo "Push succeeded"
+              exit 0
+            fi
+
+            echo "Push failed, resetting and retrying..."
+            git reset --hard origin/main
+            sleep $((attempt * 2))
+          done
+
+          echo "Failed after 5 attempts"
+          exit 1

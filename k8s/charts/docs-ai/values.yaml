@@ -1,0 +1,106 @@
+replicaCount: 1
+
+image:
+  registry: ""        # injected by ArgoCD via infra values override
+  repository: kelet-docs-ai
+  pullPolicy: IfNotPresent
+  tag: "0.0.0"        # overwritten by CI with git SHA — never deploy this default
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podSecurityContext:
+  fsGroup: 2000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8001
+
+ingress:
+  enabled: true
+  className: "alb"
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '30'
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: '5'
+    alb.ingress.kubernetes.io/healthy-threshold-count: '2'
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: '3'
+  hosts:
+    - host: ""   # set by environment
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector:
+  kubernetes.io/arch: amd64
+
+tolerations: []
+affinity: {}
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+config:
+  port: 8001
+  docsLlmsUrls: "https://kelet.ai/llms.txt"
+  docsAiModel: "bedrock:global.anthropic.claude-sonnet-4-6"
+  docsRefreshIntervalSeconds: 3600
+  rateLimitMessagesPerWindow: 20
+  rateLimitWindowSeconds: 3600
+  sessionTtlSeconds: 1800
+  # Set to the ALB CIDR or "*" (only safe behind a trusted load balancer) so uvicorn
+  # resolves the real client IP from X-Forwarded-For for accurate per-IP rate limiting.
+  # Leaving this empty disables proxy header trust — rate limit will use the pod network IP.
+  uvicornForwardedAllowIps: ""  # override in environment values (e.g. prod.yaml)
+

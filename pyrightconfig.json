@@ -1,0 +1,9 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.13",
+  "include": ["src", "app", "tests"],
+  "extraPaths": ["src"],
+  "reportMissingImports": true,
+  "reportMissingModuleSource": false
+}

@@ -1,0 +1,7 @@
+question,current_page_slug,must_contain,must_not_contain
+How do I install the Python SDK?,,"kelet",""
+What is a session?,concepts/sessions,"session",""
+What is the difference between a session and a trace?,,"session",""
+Does Kelet support TypeScript or JavaScript?,,typescript|javascript,""
+How do I send a negative signal?,,"signal",""
+What is the meaning of life?,,,"kelet"

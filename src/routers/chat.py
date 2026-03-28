@@ -1,0 +1,116 @@
+"""Chat endpoints — POST /chat (session, SSE) and GET /chat (stateless, plain text)."""
+import json
+import logging
+from typing import AsyncGenerator
+
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import PlainTextResponse, StreamingResponse
+from pydantic import BaseModel, Field
+from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
+from redis.asyncio import Redis
+
+from agent import chat_agent, DocsDeps
+from cache import ChatSession, create_session, get_session, save_session
+from docs_loader import docs_cache
+from rate_limiter import check_rate_limit
+from settings import settings
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+    session_id: str | None = None
+    current_page_slug: str | None = None
+
+
+async def _run_agent_stream(
+    message: str,
+    deps: DocsDeps,
+    message_history: list[ModelMessage],
+    session: ChatSession,
+    redis: Redis,
+) -> AsyncGenerator[str, None]:
+    """SSE generator with session persistence."""
+    history_json: str | None = None
+    try:
+        async with chat_agent.run_stream(
+            message, deps=deps, message_history=message_history
+        ) as result:
+            async for chunk in result.stream_text(delta=True):
+                yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+            history_json = result.all_messages_json().decode()
+    except Exception:
+        logger.exception("Agent stream error")
+        # Partial chunks may already have been sent — client should treat any error event as terminal.
+        yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
+        return
+
+    if history_json is not None:
+        try:
+            session.history = history_json
+            await save_session(redis, session, settings.session_ttl_seconds)
+        except Exception:
+            logger.warning("Failed to persist session %s", session.session_id, exc_info=True)
+    yield "data: [DONE]\n\n"
+
+
+@router.get("/chat")
+async def chat_stateless(
+    request: Request,
+    q: str = Query(min_length=1, max_length=4000),
+) -> PlainTextResponse:
+    """Stateless one-shot query — plain text response. No session, no history. Useful for curl / kelet skill."""
+    redis: Redis = request.app.state.redis
+
+    # request.client.host is resolved by uvicorn from X-Forwarded-For when
+    # --proxy-headers is set and UVICORN_FORWARDED_ALLOW_IPS is configured.
+    # request.client is always set behind uvicorn with --proxy-headers + UVICORN_FORWARDED_ALLOW_IPS.
+    # Fallback to "unknown" groups all unresolved clients in one bucket — acceptable for this use case.
+    client_ip = request.client.host if request.client else "unknown"
+    if not await check_rate_limit(redis, client_ip):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
+
+    deps = DocsDeps(
+        cache=docs_cache,
+        index_content=docs_cache.index_content,
+        stateless=True,
+    )
+
+    result = await chat_agent.run(q, deps=deps)
+    return PlainTextResponse(result.output)
+
+
+@router.post("/chat", response_model=None)
+async def chat(request: Request, body: ChatRequest) -> StreamingResponse:
+    redis: Redis = request.app.state.redis
+
+    client_ip = request.client.host if request.client else "unknown"
+    if not await check_rate_limit(redis, client_ip):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
+
+    # Session resolve — auto-create on missing/expired (no 404)
+    session: ChatSession | None = None
+    if body.session_id:
+        session = await get_session(redis, body.session_id)
+    if session is None:
+        session = await create_session(redis, settings.session_ttl_seconds)
+
+    message_history = ModelMessagesTypeAdapter.validate_json(session.history)
+
+    deps = DocsDeps(
+        cache=docs_cache,
+        index_content=docs_cache.index_content,
+        current_page_slug=body.current_page_slug,
+    )
+
+    return StreamingResponse(
+        _run_agent_stream(body.message, deps, message_history, session, redis),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "X-Session-ID": session.session_id,
+        },
+    )

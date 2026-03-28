@@ -1,0 +1,18 @@
+environments:
+  prod:
+    values:
+    - environments/prod.yaml
+  stag:
+    values:
+    - environments/stag.yaml
+---
+releases:
+  - name: docs-ai
+    namespace: '{{ .Environment.Name }}'
+    labels:
+      apps: true
+      component: docs-ai
+    chart: charts/docs-ai
+    values:
+      - {{ toYaml .Values.docs_ai | nindent 8 }}
+      - environment: '{{ .Environment.Name }}'

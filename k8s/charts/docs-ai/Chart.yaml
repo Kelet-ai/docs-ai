@@ -1,0 +1,14 @@
+apiVersion: v2
+name: kelet-docs-ai
+description: A Helm chart for Kelet Docs AI
+type: application
+version: 0.1.0
+appVersion: "latest"
+keywords:
+  - kelet
+  - ai
+  - docs
+home: https://github.com/kelet-ai/docs-ai
+maintainers:
+  - name: Kelet Team
+    email: team@kelet.ai

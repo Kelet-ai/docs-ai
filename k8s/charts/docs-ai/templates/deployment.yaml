@@ -1,0 +1,126 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kelet-docs-ai.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kelet-docs-ai.labels" . | nindent 4 }}
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "kelet-docs-ai.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      labels:
+        {{- include "kelet-docs-ai.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "kelet-docs-ai.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{- if .Values.image.registry }}{{ .Values.image.registry }}/{{ end }}{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.config.port }}
+              protocol: TCP
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          env:
+            # Configuration from ConfigMap
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "kelet-docs-ai.fullname" . }}-config
+                  key: PORT
+            - name: DOCS_LLMS_URLS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "kelet-docs-ai.fullname" . }}-config
+                  key: DOCS_LLMS_URLS
+            - name: DOCS_REFRESH_INTERVAL_SECONDS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "kelet-docs-ai.fullname" . }}-config
+                  key: DOCS_REFRESH_INTERVAL_SECONDS
+            - name: DOCS_AI_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "kelet-docs-ai.fullname" . }}-config
+                  key: DOCS_AI_MODEL
+            - name: RATE_LIMIT_MESSAGES_PER_WINDOW
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "kelet-docs-ai.fullname" . }}-config
+                  key: RATE_LIMIT_MESSAGES_PER_WINDOW
+            - name: RATE_LIMIT_WINDOW_SECONDS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "kelet-docs-ai.fullname" . }}-config
+                  key: RATE_LIMIT_WINDOW_SECONDS
+            - name: SESSION_TTL_SECONDS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "kelet-docs-ai.fullname" . }}-config
+                  key: SESSION_TTL_SECONDS
+            - name: UVICORN_FORWARDED_ALLOW_IPS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "kelet-docs-ai.fullname" . }}-config
+                  key: UVICORN_FORWARDED_ALLOW_IPS
+            # AWS_DEFAULT_REGION is intentionally omitted: EKS pods inherit region from
+            # EC2 instance metadata via IRSA, so no explicit env var is needed.
+
+            # Redis endpoint — host/port written by FieldExport from ACK ElastiCache resource
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "kelet-docs-ai.fullname" . }}-config
+                  key: REDIS_HOST
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "kelet-docs-ai.fullname" . }}-config
+                  key: REDIS_PORT
+            - name: REDIS_URL
+              value: "rediss://$(REDIS_HOST):$(REDIS_PORT)"
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: var-run
+              mountPath: /var/run
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: var-run
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

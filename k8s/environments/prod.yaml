@@ -1,0 +1,22 @@
+docs_ai:
+  replicaCount: 2
+  image:
+    repository: kelet-docs-ai
+    tag: "0.0.0"        # overwritten by CI with git SHA — never deploy this default
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 4
+  ingress:
+    annotations:
+      external-dns.alpha.kubernetes.io/hostname: "docs-ai.kelet.ai"
+    hosts:
+      - host: "docs-ai.kelet.ai"
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: "docs-ai-tls-prod"
+        hosts:
+          - "docs-ai.kelet.ai"
+  config:
+    uvicornForwardedAllowIps: "*"  # trusted ALB terminates TLS; all forwarded IPs are from the ALB
