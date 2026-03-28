@@ -16,3 +16,5 @@ releases:
     values:
       - {{ toYaml .Values.docs_ai | nindent 8 }}
       - environment: '{{ .Environment.Name }}'
+        image:
+          registry: '{{ env "ECR_REGISTRY" }}'
