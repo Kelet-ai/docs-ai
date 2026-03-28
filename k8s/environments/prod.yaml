@@ -1,10 +1,10 @@
 docs_ai:
-  replicaCount: 2
+  replicaCount: 1
   image:
     repository: kelet-docs-ai
     tag: "0.0.0"        # overwritten by CI with git SHA — never deploy this default
   autoscaling:
-    minReplicas: 2
+    minReplicas: 1
     maxReplicas: 4
   ingress:
     annotations:
