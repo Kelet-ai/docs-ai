@@ -86,8 +86,11 @@ spec:
                 configMapKeyRef:
                   name: {{ include "kelet-docs-ai.fullname" . }}-config
                   key: UVICORN_FORWARDED_ALLOW_IPS
-            # AWS_DEFAULT_REGION is intentionally omitted: EKS pods inherit region from
-            # EC2 instance metadata via IRSA, so no explicit env var is needed.
+            - name: AWS_DEFAULT_REGION
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "kelet-docs-ai.fullname" . }}-config
+                  key: AWS_DEFAULT_REGION
 
             # Redis endpoint — host/port written by FieldExport from ACK ElastiCache resource
             - name: REDIS_HOST

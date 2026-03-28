@@ -103,4 +103,5 @@ config:
   # resolves the real client IP from X-Forwarded-For for accurate per-IP rate limiting.
   # Leaving this empty disables proxy header trust — rate limit will use the pod network IP.
   uvicornForwardedAllowIps: ""  # override in environment values (e.g. prod.yaml)
+  awsDefaultRegion: "eu-central-1"
 
