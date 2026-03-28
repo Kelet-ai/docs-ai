@@ -48,6 +48,7 @@ jobs:
         env:
           LOGFIRE_SEND_TO_LOGFIRE: "false"
           OTEL_SDK_DISABLED: "true"
+          AWS_DEFAULT_REGION: "us-east-1"
         run: |
           # load env if present
           if [ -f ".env" ]; then set -a; . .env; set +a; fi

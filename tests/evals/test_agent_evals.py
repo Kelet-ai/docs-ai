@@ -64,14 +64,6 @@ async def _llm_judge(question: str, answer: str, criteria: str) -> JudgeVerdict:
     return result.output
 
 
-def _check_must_contain(answer: str, case: dict) -> bool:
-    must = str(case.get("must_contain", "")).strip()
-    if not must:
-        return True
-    alts = [a.strip().lower() for a in must.split("|")]
-    return any(a in answer.lower() for a in alts if a)
-
-
 @pytest.mark.eval(name="docs_agent")
 @pytest.mark.parametrize("case", cases)
 @pytest.mark.asyncio
@@ -93,17 +85,12 @@ async def test_agent_answer(case, eval_bag):
             answer = ""
             eval_bag.error = str(e)
 
-        eval_bag.question = case["question"]
-        eval_bag.answer = answer
+    eval_bag.question = case["question"]
+    eval_bag.answer = answer
 
-        criteria = str(case.get("judgment_criteria", "")).strip()
-        if criteria:
-            verdict = await _llm_judge(case["question"], answer, criteria)
-            eval_bag.judge_reasoning = verdict.reasoning
-            eval_bag.passed = verdict.passed
-        else:
-            eval_bag.contains_ok = _check_must_contain(answer, case)
-            eval_bag.passed = eval_bag.contains_ok
+    verdict = await _llm_judge(case["question"], answer, case["judgment_criteria"])
+    eval_bag.judge_reasoning = verdict.reasoning
+    eval_bag.passed = verdict.passed
 
 
 @pytest.mark.eval_analysis(name="docs_agent")

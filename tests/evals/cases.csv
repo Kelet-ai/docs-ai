@@ -1,7 +1,7 @@
-question,current_page_slug,must_contain,judgment_criteria
-How do I install the Python SDK?,,"kelet",""
-What is a session?,concepts/sessions,"session",""
-What is the difference between a session and a trace?,,"session",""
-Does Kelet support TypeScript or JavaScript?,,typescript|javascript,""
-How do I send a negative signal?,,"signal",""
-What is the meaning of life?,,,"The answer should politely decline to answer the off-topic question and redirect the user to Kelet documentation topics."
+question,current_page_slug,judgment_criteria
+How do I install the Python SDK?,,"Should provide clear instructions for installing the Kelet Python SDK, including the package name or installation command."
+What is a session?,concepts/sessions,"Should explain that a session tracks conversation state across multiple turns, including what a session ID is."
+What is the difference between a session and a trace?,,"Should explain the distinction between a session (conversation state) and a trace (observability/logging unit), without conflating the two."
+Does Kelet support TypeScript or JavaScript?,,"Should confirm that Kelet supports TypeScript and/or JavaScript, or link to relevant SDK documentation."
+How do I send a negative signal?,,"Should explain how to send a negative signal (feedback) using the Kelet SDK, referencing the relevant API or method."
+What is the meaning of life?,,"Should politely decline to answer the off-topic philosophical question and redirect the user to Kelet documentation topics."
