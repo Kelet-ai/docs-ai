@@ -3,8 +3,14 @@ import json
 import pytest
 import pandas as pd
 from pathlib import Path
+from dataclasses import dataclass
+
+from pydantic_ai import Agent
 
 CASES_FILE = Path(__file__).parent / "cases.csv"
+
+# Cheap judge model — Haiku is sufficient for pass/fail verdicts
+_JUDGE_MODEL = "bedrock:anthropic.claude-haiku-4-5-20251001"
 
 
 def _load_cases():
@@ -35,20 +41,35 @@ def _parse_sse_text(body: str) -> str:
     return "".join(chunks)
 
 
+@dataclass
+class JudgeVerdict:
+    passed: bool
+    reasoning: str
+
+
+_judge_agent: Agent[None, JudgeVerdict] = Agent(
+    model=_JUDGE_MODEL,
+    output_type=JudgeVerdict,
+    system_prompt=(
+        "You are an evaluation judge. Given a user question, an assistant answer, "
+        "and a criterion, decide whether the answer meets the criterion. "
+        "Be strict but fair. Return passed=true only if the criterion is clearly satisfied."
+    ),
+)
+
+
+async def _llm_judge(question: str, answer: str, criteria: str) -> JudgeVerdict:
+    prompt = f"Question: {question}\n\nAnswer: {answer}\n\nCriterion: {criteria}"
+    result = await _judge_agent.run(prompt)
+    return result.output
+
+
 def _check_must_contain(answer: str, case: dict) -> bool:
     must = str(case.get("must_contain", "")).strip()
     if not must:
         return True
-    # Support "a|b" for OR matching
     alts = [a.strip().lower() for a in must.split("|")]
     return any(a in answer.lower() for a in alts if a)
-
-
-def _check_must_not_contain(answer: str, case: dict) -> bool:
-    must_not = str(case.get("must_not_contain", "")).strip()
-    if not must_not:
-        return True
-    return must_not.lower() not in answer.lower()
 
 
 @pytest.mark.eval(name="docs_agent")
@@ -74,9 +95,15 @@ async def test_agent_answer(case, eval_bag):
 
         eval_bag.question = case["question"]
         eval_bag.answer = answer
-        eval_bag.contains_ok = _check_must_contain(answer, case)
-        eval_bag.not_contains_ok = _check_must_not_contain(answer, case)
-        eval_bag.passed = eval_bag.contains_ok and eval_bag.not_contains_ok
+
+        criteria = str(case.get("judgment_criteria", "")).strip()
+        if criteria:
+            verdict = await _llm_judge(case["question"], answer, criteria)
+            eval_bag.judge_reasoning = verdict.reasoning
+            eval_bag.passed = verdict.passed
+        else:
+            eval_bag.contains_ok = _check_must_contain(answer, case)
+            eval_bag.passed = eval_bag.contains_ok
 
 
 @pytest.mark.eval_analysis(name="docs_agent")
@@ -89,5 +116,7 @@ def test_eval_analysis(eval_results):
     print(f"\nDocs agent eval: {passed}/{total} passed ({accuracy:.0%})")
     for r in eval_results:
         if not getattr(r, "passed", True):
-            print(f"  FAIL q={r.question!r} a={getattr(r, 'answer', '')[:80]!r}")
+            reasoning = getattr(r, "judge_reasoning", "")
+            detail = f" [{reasoning}]" if reasoning else ""
+            print(f"  FAIL q={r.question!r} a={getattr(r, 'answer', '')[:80]!r}{detail}")
     assert accuracy >= 0.80, f"Eval accuracy {accuracy:.0%} below 80% threshold"
