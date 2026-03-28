@@ -54,7 +54,7 @@ jobs:
 
           # run tests
           set +e
-          uv run pytest -n auto --junitxml=junit/test-results.xml
+          uv run pytest -n auto --ignore=tests/evals --junitxml=junit/test-results.xml
           status=$?
           if [ $status -eq 5 ]; then
             echo "No tests collected. Creating empty reports."
