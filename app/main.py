@@ -2,6 +2,7 @@
 import logging
 from contextlib import asynccontextmanager
 
+import kelet
 from fakeredis.aioredis import FakeRedis as InMemoryRedis  # in-memory fallback; alias clarifies prod intent
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,6 +31,8 @@ async def lifespan(app: FastAPI):
         redis = await redis_from_url(settings.redis_url, decode_responses=True)
         await redis.ping()  # type: ignore[misc]  # fail fast if Redis is unreachable
     app.state.redis = redis
+    if settings.kelet_api_key:
+        kelet.configure(api_key=settings.kelet_api_key, project=settings.kelet_project)
     await docs_cache.start()
     try:
         yield

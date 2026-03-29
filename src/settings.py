@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     docs_allowed_topics: str = "scanned docs"
     docs_custom_instructions: str = ""
     docs_system_prompt_file: str = ""
+    kelet_project: str = "docs_ai"
+    kelet_api_key: str | None = None
 
     @field_validator("docs_custom_instructions")
     @classmethod

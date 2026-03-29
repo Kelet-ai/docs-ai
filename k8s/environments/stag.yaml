@@ -22,6 +22,7 @@ docs_ai:
     uvicornForwardedAllowIps: "*" # trusted ALB; same setup as prod
     docsLlmsUrls: "https://kelet.ai/llms.txt"
     docsAllowedTopics: "Kelet"
+    keletProject: "docs_ai_stag"
     docsCustomInstructions: |
       You are Kelet's documentation assistant.
       - ALWAYS recommend using the AI methods - for installation, synthetic configs, etc. Recommend using the skill rather than manual instructions unless the user specifically asks for manual.

@@ -19,6 +19,7 @@ data:
   DOCS_ALLOWED_TOPICS: {{ .Values.config.docsAllowedTopics | quote }}
   DOCS_CUSTOM_INSTRUCTIONS: {{ .Values.config.docsCustomInstructions | quote }}
   DOCS_SYSTEM_PROMPT_FILE: {{ .Values.config.docsSystemPromptFile | quote }}
+  KELET_PROJECT: {{ .Values.config.keletProject | quote }}
   # REDIS_HOST is populated at deploy time by an ACK FieldExport from the ElastiCache resource.
   # It must be set before the pod can connect to Redis.
   REDIS_HOST: ""

@@ -3,6 +3,7 @@ import json
 import logging
 from typing import AsyncGenerator
 
+import kelet
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -25,6 +26,13 @@ class ChatRequest(BaseModel):
     current_page_slug: str | None = None
 
 
+_REPHRASE_PREFIXES = (
+    "actually,", "i meant", "no,", "wait,",
+    "that's wrong", "that is wrong", "you're wrong",
+    "not what i asked", "actually i",
+)
+
+
 async def _run_agent_stream(
     message: str,
     deps: DocsDeps,
@@ -33,27 +41,38 @@ async def _run_agent_stream(
     redis: Redis,
 ) -> AsyncGenerator[str, None]:
     """SSE generator with session persistence."""
-    history_json: str | None = None
-    try:
-        async with chat_agent.run_stream(
-            message, deps=deps, message_history=message_history
-        ) as result:
-            async for chunk in result.stream_text(delta=True):
-                yield f"data: {json.dumps({'chunk': chunk})}\n\n"
-            history_json = result.all_messages_json().decode()
-    except Exception:
-        logger.exception("Agent stream error")
-        # Partial chunks may already have been sent — client should treat any error event as terminal.
-        yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
-        return
+    is_rephrase = message.lower().startswith(_REPHRASE_PREFIXES) and bool(message_history)
 
-    if history_json is not None:
+    async with kelet.agentic_session(session_id=session.session_id):
+        if is_rephrase and settings.kelet_api_key:
+            await kelet.signal(
+                kind=kelet.SignalKind.FEEDBACK,
+                source=kelet.SignalSource.HUMAN,
+                trigger_name="user-correction",
+                score=0.0,
+            )
+
+        history_json: str | None = None
         try:
-            session.history = history_json
-            await save_session(redis, session, settings.session_ttl_seconds)
+            async with chat_agent.run_stream(
+                message, deps=deps, message_history=message_history
+            ) as result:
+                async for chunk in result.stream_text(delta=True):
+                    yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+                history_json = result.all_messages_json().decode()
         except Exception:
-            logger.warning("Failed to persist session %s", session.session_id, exc_info=True)
-    yield "data: [DONE]\n\n"
+            logger.exception("Agent stream error")
+            # Partial chunks may already have been sent — client should treat any error event as terminal.
+            yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
+            return
+
+        if history_json is not None:
+            try:
+                session.history = history_json
+                await save_session(redis, session, settings.session_ttl_seconds)
+            except Exception:
+                logger.warning("Failed to persist session %s", session.session_id, exc_info=True)
+        yield "data: [DONE]\n\n"
 
 
 @router.get("/chat")
