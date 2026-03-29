@@ -180,6 +180,7 @@ All configuration is via environment variables (or a `.env` file).
 | Variable | Default | Description |
 |---|---|---|
 | `DOCS_LLMS_URLS` | `https://kelet.ai/llms.txt` | Space-separated list of `llms.txt` URLs to crawl. Supports nested `llms.txt` files. |
+| `DOCS_ALLOWED_HOSTS` | *(auto)* | Space-separated list of allowed hostnames the crawler may fetch. Supports wildcards (`*.kelet.ai`). When unset, only hosts from `DOCS_LLMS_URLS` are allowed. |
 | `DOCS_AI_MODEL` | `bedrock:global.anthropic.claude-sonnet-4-6` | pydantic-ai model string. See [choosing a model](#choosing-a-model). |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection string. Use `rediss://` for TLS in production. |
 | `DOCS_REFRESH_INTERVAL_SECONDS` | `3600` | How often to re-fetch documentation from source URLs. |

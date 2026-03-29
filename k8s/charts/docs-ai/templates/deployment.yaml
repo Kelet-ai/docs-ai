@@ -56,6 +56,11 @@ spec:
                 configMapKeyRef:
                   name: {{ include "kelet-docs-ai.fullname" . }}-config
                   key: DOCS_LLMS_URLS
+            - name: DOCS_ALLOWED_HOSTS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "kelet-docs-ai.fullname" . }}-config
+                  key: DOCS_ALLOWED_HOSTS
             - name: DOCS_REFRESH_INTERVAL_SECONDS
               valueFrom:
                 configMapKeyRef:

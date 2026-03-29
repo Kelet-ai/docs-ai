@@ -94,6 +94,7 @@ readinessProbe:
 config:
   port: 8001
   docsLlmsUrls: "https://kelet.ai/llms.txt"
+  docsAllowedHosts: ""  # space-separated hostnames/wildcards (e.g. "*.kelet.ai"); empty = auto-derive from docsLlmsUrls
   docsAiModel: "bedrock:global.anthropic.claude-sonnet-4-6"
   docsRefreshIntervalSeconds: 3600
   rateLimitMessagesPerWindow: 20

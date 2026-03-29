@@ -14,11 +14,34 @@ from settings import settings
 logger = logging.getLogger(__name__)
 
 
-def _parse_urls_from_llms(content: str, base_url: str) -> tuple[list[str], list[str]]:
+def _is_host_allowed(hostname: str, patterns: frozenset[str]) -> bool:
+    """Return True if hostname matches any pattern in patterns.
+
+    Patterns may be exact hostnames or wildcard prefixes of the form ``*.example.com``.
+    A wildcard matches exactly one subdomain label, so ``*.kelet.ai`` matches
+    ``docs.kelet.ai`` but not ``kelet.ai`` itself or ``evil.kelet.ai.evil.com``.
+    """
+    hostname = hostname.lower()
+    for pattern in patterns:
+        if pattern.startswith("*."):
+            suffix = pattern[1:]  # ".kelet.ai"
+            if hostname.endswith(suffix) and hostname != suffix.lstrip("."):
+                return True
+        elif hostname == pattern:
+            return True
+    return False
+
+
+def _parse_urls_from_llms(
+    content: str,
+    base_url: str,
+    allowed_hosts: frozenset[str] | None = None,
+) -> tuple[list[str], list[str]]:
     """Parse llms.txt content — classify markdown-link URLs as nested llms.txt or content pages.
 
     Returns (nested_llms_urls, page_urls) as absolute URLs.
     base_url is used to resolve relative paths.
+    If allowed_hosts is provided, URLs whose hostname is not in the set are silently dropped.
     """
     llms_urls: list[str] = []
     page_urls: list[str] = []
@@ -32,6 +55,12 @@ def _parse_urls_from_llms(content: str, base_url: str) -> tuple[list[str], list[
         if abs_url in seen:
             continue
         seen.add(abs_url)
+
+        if allowed_hosts is not None:
+            parsed_host = urlparse(abs_url).hostname or ""
+            if not _is_host_allowed(parsed_host, allowed_hosts):
+                logger.debug("Skipping disallowed host: %s", abs_url)
+                continue
 
         if abs_url.endswith('llms.txt'):
             llms_urls.append(abs_url)
@@ -99,6 +128,16 @@ class DocsCache:
         """BFS over llms.txt files starting from settings.docs_llms_urls."""
         initial_urls = settings.docs_llms_urls.split()
 
+        raw_allowed = settings.docs_allowed_hosts.split()
+        if raw_allowed:
+            allowed_hosts: frozenset[str] = frozenset(h.lower() for h in raw_allowed)
+        else:
+            allowed_hosts = frozenset(
+                h.lower()
+                for u in initial_urls
+                if (h := urlparse(u).hostname)
+            )
+
         async with httpx.AsyncClient(follow_redirects=True) as client:
             queue: deque[str] = deque(initial_urls)
             visited_llms: set[str] = set()
@@ -121,7 +160,7 @@ class DocsCache:
                     continue  # Skip failed llms.txt fetches; others may still succeed
 
                 all_index_parts.append(content)
-                nested_llms, page_urls = _parse_urls_from_llms(content, llms_url)
+                nested_llms, page_urls = _parse_urls_from_llms(content, llms_url, allowed_hosts)
 
                 for url in nested_llms:
                     if url not in visited_llms:

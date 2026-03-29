@@ -8,6 +8,7 @@ metadata:
 data:
   PORT: {{ .Values.config.port | quote }}
   DOCS_LLMS_URLS: {{ .Values.config.docsLlmsUrls | quote }}
+  DOCS_ALLOWED_HOSTS: {{ .Values.config.docsAllowedHosts | quote }}
   DOCS_AI_MODEL: {{ .Values.config.docsAiModel | quote }}
   DOCS_REFRESH_INTERVAL_SECONDS: {{ .Values.config.docsRefreshIntervalSeconds | quote }}
   RATE_LIMIT_MESSAGES_PER_WINDOW: {{ .Values.config.rateLimitMessagesPerWindow | quote }}

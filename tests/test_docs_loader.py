@@ -3,7 +3,7 @@ import asyncio
 
 import pytest
 
-from docs_loader import DocsCache, _parse_urls_from_llms, _tokenize, _url_to_key
+from docs_loader import DocsCache, _is_host_allowed, _parse_urls_from_llms, _tokenize, _url_to_key
 
 
 def test_parse_urls_from_llms_classifies_correctly():
@@ -64,6 +64,66 @@ def test_build_bm25_index_chunks(sample_cache):
     """BM25 index has chunks from both pages."""
     assert len(sample_cache._chunks) >= 2
     assert sample_cache._bm25 is not None
+
+
+# --- Allowed-hosts filtering ---
+
+_MIXED_CONTENT = (
+    "- [Page](https://kelet.ai/page.md)\n"
+    "- [Subdoc](https://docs.kelet.ai/guide.md)\n"
+    "- [Evil](https://evil.com/steal.md)\n"
+    "- [Tricky](https://evil.kelet.ai.evil.com/trick.md)\n"
+    "- [Nested](https://kelet.ai/docs/llms.txt)\n"
+)
+
+
+def test_allowed_hosts_exact_match_allows():
+    _, page_urls = _parse_urls_from_llms(_MIXED_CONTENT, "https://kelet.ai/llms.txt", frozenset({"kelet.ai"}))
+    assert "https://kelet.ai/page.md" in page_urls
+
+
+def test_allowed_hosts_exact_match_rejects_external():
+    _, page_urls = _parse_urls_from_llms(_MIXED_CONTENT, "https://kelet.ai/llms.txt", frozenset({"kelet.ai"}))
+    assert not any("evil.com" in u for u in page_urls)
+
+
+def test_allowed_hosts_wildcard_allows_subdomain():
+    _, page_urls = _parse_urls_from_llms(_MIXED_CONTENT, "https://kelet.ai/llms.txt", frozenset({"*.kelet.ai"}))
+    assert "https://docs.kelet.ai/guide.md" in page_urls
+
+
+def test_allowed_hosts_wildcard_rejects_wrong_suffix():
+    _, page_urls = _parse_urls_from_llms(_MIXED_CONTENT, "https://kelet.ai/llms.txt", frozenset({"*.kelet.ai"}))
+    assert not any("evil.kelet.ai.evil.com" in u for u in page_urls)
+
+
+def test_allowed_hosts_wildcard_does_not_match_parent_domain():
+    _, page_urls = _parse_urls_from_llms(_MIXED_CONTENT, "https://kelet.ai/llms.txt", frozenset({"*.kelet.ai"}))
+    assert "https://kelet.ai/page.md" not in page_urls
+
+
+def test_allowed_hosts_none_passes_everything():
+    llms_urls, page_urls = _parse_urls_from_llms(_MIXED_CONTENT, "https://kelet.ai/llms.txt", None)
+    assert "https://evil.com/steal.md" in page_urls
+    assert "https://kelet.ai/docs/llms.txt" in llms_urls
+
+
+def test_allowed_hosts_multiple_patterns():
+    allowed = frozenset({"*.kelet.ai", "docs.example.com"})
+    content = (
+        "- [A](https://docs.kelet.ai/a.md)\n"
+        "- [B](https://docs.example.com/b.md)\n"
+        "- [C](https://other.com/c.md)\n"
+    )
+    _, page_urls = _parse_urls_from_llms(content, "https://kelet.ai/llms.txt", allowed)
+    assert "https://docs.kelet.ai/a.md" in page_urls
+    assert "https://docs.example.com/b.md" in page_urls
+    assert "https://other.com/c.md" not in page_urls
+
+
+def test_is_host_allowed_case_insensitive():
+    assert _is_host_allowed("DOCS.Kelet.AI", frozenset({"*.kelet.ai"}))
+    assert _is_host_allowed("Kelet.AI", frozenset({"kelet.ai"}))
 
 
 @pytest.mark.asyncio
