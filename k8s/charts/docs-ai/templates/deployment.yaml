@@ -96,6 +96,21 @@ spec:
                 configMapKeyRef:
                   name: {{ include "kelet-docs-ai.fullname" . }}-config
                   key: AWS_DEFAULT_REGION
+            - name: DOCS_ALLOWED_TOPICS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "kelet-docs-ai.fullname" . }}-config
+                  key: DOCS_ALLOWED_TOPICS
+            - name: DOCS_CUSTOM_INSTRUCTIONS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "kelet-docs-ai.fullname" . }}-config
+                  key: DOCS_CUSTOM_INSTRUCTIONS
+            - name: DOCS_SYSTEM_PROMPT_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "kelet-docs-ai.fullname" . }}-config
+                  key: DOCS_SYSTEM_PROMPT_FILE
 
             # Redis endpoint — host/port written by FieldExport from ACK ElastiCache resource
             - name: REDIS_HOST
