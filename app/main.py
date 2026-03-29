@@ -1,6 +1,8 @@
 """FastAPI application — docs-ai service."""
+import logging
 from contextlib import asynccontextmanager
 
+from fakeredis.aioredis import FakeRedis as InMemoryRedis  # in-memory fallback; alias clarifies prod intent
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from redis.asyncio import Redis
@@ -10,11 +12,23 @@ from docs_loader import docs_cache
 from routers.chat import router as chat_router
 from settings import settings
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    redis = await redis_from_url(settings.redis_url, decode_responses=True)
-    await redis.ping()  # type: ignore[misc]  # fail fast if Redis is unreachable
+    if settings.redis_url is None:
+        # No REDIS_URL configured: use in-memory store (single-process, not persistent).
+        # FakeRedis has no maxsize cap; TTLs provide natural eviction
+        # (sessions: 30 min, rate-limit keys: 2 h by default).
+        logger.info("store: in-memory (REDIS_URL not set) — data is not persistent and not shared across replicas")
+        redis = InMemoryRedis(decode_responses=True)
+    else:
+        from urllib.parse import urlparse
+        _p = urlparse(settings.redis_url)
+        logger.info("store: Redis at %s:%s", _p.hostname, _p.port)
+        redis = await redis_from_url(settings.redis_url, decode_responses=True)
+        await redis.ping()  # type: ignore[misc]  # fail fast if Redis is unreachable
     app.state.redis = redis
     await docs_cache.start()
     try:

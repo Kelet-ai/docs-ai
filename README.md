@@ -14,7 +14,7 @@
 
 **docs-ai** is a self-hosted service that turns any [`llms.txt`](https://llmstxt.org) file into a fully functional chat interface. Point it at one or more `llms.txt` URLs and you instantly get an AI assistant that knows your documentation — nothing else.
 
-No vector databases. No embeddings pipeline. No proprietary lock-in. Just a URL, Redis, and an LLM.
+No vector databases. No embeddings pipeline. No proprietary lock-in. Just a URL and an LLM.
 
 > Originally built to power the [Kelet](https://kelet.ai) docs assistant — an AI that diagnoses and fixes AI agent failures.
 
@@ -34,7 +34,7 @@ llms.txt URL(s)
      ▼
  FastAPI + pydantic-ai agent
      ├── GET  /chat?q=...        plain text, stateless (great for curl)
-     └── POST /chat              SSE stream, multi-turn sessions via Redis
+     └── POST /chat              SSE stream, multi-turn sessions (in-memory by default, Redis when REDIS_URL is set)
 ```
 
 The agent has two tools: `search_docs(query)` for discovery and `get_page(slug)` for full-page retrieval. It answers strictly from your documentation — no hallucinated API names, no general-knowledge drift.
@@ -47,8 +47,8 @@ The agent has two tools: `search_docs(query)` for discovery and `get_page(slug)`
 - **Two chat modes** — stateless `GET` for scripts/CI, stateful `POST` with SSE streaming for chat UIs
 - **BM25 search** — fast full-text retrieval with no embeddings, no vector DB, no GPU
 - **Any LLM** — swap the model via one env var: OpenAI, Anthropic, AWS Bedrock, Ollama, or anything [pydantic-ai](https://ai.pydantic.dev) supports
-- **Session memory** — multi-turn conversations backed by Redis with configurable TTL
-- **Rate limiting** — per-IP fixed-window counter, atomic via Redis, works across replicas
+- **Session memory** — multi-turn conversations with configurable TTL; in-memory by default, Redis for persistence and multi-replica deployments
+- **Rate limiting** — per-IP fixed-window counter; in-memory for single-instance, atomic via Redis for multi-replica
 - **Auto-refresh** — docs are re-fetched in the background on a configurable interval
 - **Production-ready** — Helm chart, HPA, health checks, and proxy-aware IP resolution included
 
@@ -103,7 +103,7 @@ curl "http://localhost:8001/chat?q=how+do+I+get+started"
 
 ### Docker
 
-Build the production image and run it alongside Redis:
+Build the production image. Redis is optional — omit `-e REDIS_URL` to use in-memory storage (single-process, not persistent). Include it for persistent sessions and multi-replica deployments:
 
 ```bash
 git clone https://github.com/your-org/docs-ai.git
@@ -147,7 +147,7 @@ uv sync
 cp .env.example .env   # edit DOCS_LLMS_URLS and DOCS_AI_MODEL
 ```
 
-Make sure Redis is running (`redis-server` or `brew services start redis`), then:
+By default the service uses in-memory storage — no Redis required. To enable Redis (recommended for persistent sessions and multi-replica deployments), set `REDIS_URL` in your `.env`. Then:
 
 ```bash
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
@@ -216,7 +216,7 @@ curl -X POST http://localhost:8001/chat \
 
 ### `GET /health`
 
-Returns `200` when Redis is reachable and docs are loaded. Returns `503` during startup. Use this for liveness/readiness probes.
+Returns `200` when the store is ready and docs are loaded. Returns `503` during startup. Use this for liveness/readiness probes.
 
 ---
 
@@ -229,11 +229,11 @@ All configuration is via environment variables (or a `.env` file).
 | `DOCS_LLMS_URLS` | *(required)* | Space-separated list of `llms.txt` URLs to crawl. Supports nested `llms.txt` files. |
 | `DOCS_ALLOWED_HOSTS` | *(auto)* | Space-separated list of allowed hostnames the crawler may fetch. Supports wildcards (`*.example.com`). When unset, only hosts from `DOCS_LLMS_URLS` are allowed. |
 | `DOCS_AI_MODEL` | `bedrock:global.anthropic.claude-sonnet-4-6` | pydantic-ai model string. See [choosing a model](#choosing-a-model). |
-| `REDIS_URL` | `redis://localhost:6379` | Redis connection string. Use `rediss://` for TLS in production. |
+| `REDIS_URL` | *(unset)* | Redis connection string. If unset, the service uses in-memory storage (not persistent, single-process only). Set to a Redis URL for persistent sessions and multi-replica deployments. Use `rediss://` for TLS. |
 | `DOCS_REFRESH_INTERVAL_SECONDS` | `3600` | How often to re-fetch documentation from source URLs. |
 | `RATE_LIMIT_MESSAGES_PER_WINDOW` | `20` | Max requests per IP per window. |
 | `RATE_LIMIT_WINDOW_SECONDS` | `3600` | Rate limit window duration in seconds. |
-| `SESSION_TTL_SECONDS` | `1800` | How long chat sessions are kept in Redis. |
+| `SESSION_TTL_SECONDS` | `1800` | How long chat sessions are kept before expiry. |
 | `UVICORN_FORWARDED_ALLOW_IPS` | *(unset)* | Set to `*` or your load balancer CIDR when running behind a reverse proxy, so rate limiting uses the real client IP from `X-Forwarded-For`. |
 | `DOCS_ALLOWED_TOPICS` | `scanned docs` | Topic scope for the assistant. The prompt strictly refuses questions outside this scope. Set to your product or org name (e.g. `MyProduct`). |
 | `DOCS_CUSTOM_INSTRUCTIONS` | *(empty)* | Multiline string appended to the system prompt. Use for brand identity, product-specific recommendations, tone guidelines, etc. |
@@ -252,6 +252,26 @@ All configuration is via environment variables (or a `.env` file).
 | AWS Bedrock | `bedrock:anthropic.claude-sonnet-4-6` | AWS credentials via IAM/IRSA |
 | Ollama (local) | `ollama:llama3.1` | *(none)* |
 | Gemini | `google-gla:gemini-2.0-flash` | `GOOGLE_API_KEY` |
+
+---
+
+## Integrating into a UI
+
+The `POST /chat` endpoint is designed for browser chat UIs: it streams tokens over SSE and returns a `X-Session-ID` header you pass back on subsequent requests to maintain conversation history.
+
+To add a chat widget to your documentation site, use the **docs-ai-integration** Claude Code skill. It knows the full API contract, UI/UX spec, and user journey — and will generate idiomatic code for your framework (React, Astro, Docusaurus, MkDocs, Vue, vanilla JS, etc.):
+
+```bash
+npx skills install kelet-ai/docs-ai
+```
+
+Then in your project:
+
+```
+/docs-ai-integration
+```
+
+The skill will ask for your docs-ai deployment URL, wire it to the right environment variable for your stack, and implement the full widget: floating chip, streaming chat panel, mobile bottom sheet, typing indicator, session management, and search integration.
 
 ---
 
@@ -328,7 +348,7 @@ BM25 starts instantly, needs no model downloads, uses no GPU, and works fully of
 The `GET` endpoint is designed for programmatic use (curl, CI, AI skills) where simplicity matters. The `POST` endpoint with SSE is designed for chat UIs where streaming and conversation continuity matter. Keeping them separate means neither compromises for the other.
 
 **Rate limiting across replicas**
-The rate limiter uses a Redis atomic `INCR` with a TTL-based key per IP and time window. This works correctly across any number of replicas without coordination overhead.
+When `REDIS_URL` is set, the rate limiter uses a Redis atomic `INCR` with a TTL-based key per IP and time window — correct across any number of replicas without coordination overhead. Without `REDIS_URL`, rate limiting uses an in-memory counter that is local to each process (single-instance only).
 
 ---
 
