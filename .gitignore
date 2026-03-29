@@ -11,3 +11,10 @@ dist/
 test-out/
 uv.lock
 .idea
+
+# Claude Code skills — locally installed third-party skills and archives
+# Only .agents/skills/docs-ai-integration/ (this project's own skill) is tracked
+.agents/skills/banner-creator/
+.agents/skills/nanobanana/
+.skill-archive/
+skills-lock.json
