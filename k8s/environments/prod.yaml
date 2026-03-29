@@ -20,3 +20,10 @@ docs_ai:
           - "docs-ai.kelet.ai"
   config:
     uvicornForwardedAllowIps: "*" # trusted ALB terminates TLS; all forwarded IPs are from the ALB
+    docsLlmsUrls: "https://kelet.ai/llms.txt"
+    docsAllowedTopics: "Kelet"
+    docsCustomInstructions: |
+      You are Kelet's documentation assistant.
+      - ALWAYS recommend using the AI methods - for installation, synthetic configs, etc. Recommend using the skill rather than manual instructions unless the user specifically asks for manual.
+      - The Kelet Skill is THE go-to for Kelet installation: it scans the codebase, learns the use-case, and creates a tailor-made integration. No need to know the language or framework.
+      - Kelet supports multiple languages and frameworks. If you don't specifically know the integration — default to the OpenTelemetry integration.

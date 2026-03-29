@@ -54,7 +54,13 @@ The agent has two tools: `search_docs(query)` for discovery and `get_page(slug)`
 
 ---
 
-## Quick start
+## Installation
+
+Pick the method that fits your setup.
+
+---
+
+### Docker Compose (quickest)
 
 **Prerequisites:** Docker, Docker Compose, and an LLM API key.
 
@@ -64,7 +70,7 @@ cd docs-ai
 cp .env.example .env
 ```
 
-Edit `.env` — the only required change:
+Edit `.env`:
 
 ```bash
 # Point at your own docs, or use any public llms.txt
@@ -72,13 +78,16 @@ DOCS_LLMS_URLS=https://yoursite.com/llms.txt
 
 # Set your LLM (see "Choosing a model" below)
 DOCS_AI_MODEL=openai:gpt-4o
+OPENAI_API_KEY=sk-...
 ```
 
-Then start:
+Start the service (includes Redis):
 
 ```bash
 docker compose up
 ```
+
+> This uses `Dockerfile.dev` with live-reload and source mounts — ideal for local development. For a production image, use the Docker section below.
 
 The service starts at `http://localhost:8001`. Verify it's ready:
 
@@ -92,12 +101,50 @@ curl "http://localhost:8001/chat?q=how+do+I+get+started"
 
 ---
 
-## Running without Docker
+### Docker
+
+Build the production image and run it alongside Redis:
+
+```bash
+git clone https://github.com/your-org/docs-ai.git
+cd docs-ai
+
+# Build the image
+docker build -t docs-ai .
+
+# Start Redis
+docker run -d --name docs-ai-redis redis:7-alpine
+
+# Start the service
+docker run -d \
+  --name docs-ai \
+  --link docs-ai-redis:redis \
+  -e DOCS_LLMS_URLS=https://yoursite.com/llms.txt \
+  -e DOCS_AI_MODEL=openai:gpt-4o \
+  -e OPENAI_API_KEY=sk-... \
+  -e REDIS_URL=redis://redis:6379 \
+  -p 8001:8001 \
+  docs-ai
+```
+
+Check it's up:
+
+```bash
+curl http://localhost:8001/health
+# → {"status":"ok"}
+```
+
+---
+
+### Python
 
 Requires Python 3.13+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
+git clone https://github.com/your-org/docs-ai.git
+cd docs-ai
 uv sync
+cp .env.example .env   # edit DOCS_LLMS_URLS and DOCS_AI_MODEL
 ```
 
 Make sure Redis is running (`redis-server` or `brew services start redis`), then:
@@ -179,8 +226,8 @@ All configuration is via environment variables (or a `.env` file).
 
 | Variable | Default | Description |
 |---|---|---|
-| `DOCS_LLMS_URLS` | `https://kelet.ai/llms.txt` | Space-separated list of `llms.txt` URLs to crawl. Supports nested `llms.txt` files. |
-| `DOCS_ALLOWED_HOSTS` | *(auto)* | Space-separated list of allowed hostnames the crawler may fetch. Supports wildcards (`*.kelet.ai`). When unset, only hosts from `DOCS_LLMS_URLS` are allowed. |
+| `DOCS_LLMS_URLS` | *(required)* | Space-separated list of `llms.txt` URLs to crawl. Supports nested `llms.txt` files. |
+| `DOCS_ALLOWED_HOSTS` | *(auto)* | Space-separated list of allowed hostnames the crawler may fetch. Supports wildcards (`*.example.com`). When unset, only hosts from `DOCS_LLMS_URLS` are allowed. |
 | `DOCS_AI_MODEL` | `bedrock:global.anthropic.claude-sonnet-4-6` | pydantic-ai model string. See [choosing a model](#choosing-a-model). |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection string. Use `rediss://` for TLS in production. |
 | `DOCS_REFRESH_INTERVAL_SECONDS` | `3600` | How often to re-fetch documentation from source URLs. |
@@ -188,6 +235,9 @@ All configuration is via environment variables (or a `.env` file).
 | `RATE_LIMIT_WINDOW_SECONDS` | `3600` | Rate limit window duration in seconds. |
 | `SESSION_TTL_SECONDS` | `1800` | How long chat sessions are kept in Redis. |
 | `UVICORN_FORWARDED_ALLOW_IPS` | *(unset)* | Set to `*` or your load balancer CIDR when running behind a reverse proxy, so rate limiting uses the real client IP from `X-Forwarded-For`. |
+| `DOCS_ALLOWED_TOPICS` | `scanned docs` | Topic scope for the assistant. The prompt strictly refuses questions outside this scope. Set to your product or org name (e.g. `MyProduct`). |
+| `DOCS_CUSTOM_INSTRUCTIONS` | *(empty)* | Multiline string appended to the system prompt. Use for brand identity, product-specific recommendations, tone guidelines, etc. |
+| `DOCS_SYSTEM_PROMPT_FILE` | *(empty)* | Path to a Jinja2 template file that fully replaces the built-in system prompt. The template receives `index_content`, `current_page_slug`, `stateless`, `allowed_topics`, and `custom_instructions` as variables. Useful for mounting a custom prompt via a Kubernetes ConfigMap volume. |
 
 ---
 
@@ -235,20 +285,34 @@ uv run pytest tests/evals -n auto
 
 ## Deploying to Kubernetes
 
-A production-ready Helm chart is included.
+A production-ready Helm chart is included at `k8s/charts/docs-ai/`.
+
+**Prerequisites:** a running Redis instance (or Kubernetes-managed Redis) and a container image pushed to a registry.
 
 ```bash
 helm install docs-ai ./k8s/charts/docs-ai \
-  --set config.docsLlmsTxtUrls="https://yoursite.com/llms.txt" \
+  --set image.registry=ghcr.io/your-org \
+  --set image.tag=latest \
+  --set config.docsLlmsUrls="https://yoursite.com/llms.txt" \
   --set config.docsAiModel="openai:gpt-4o" \
-  --set secrets.openaiApiKey="sk-..."
+  --set-string 'extraEnv[0].name=OPENAI_API_KEY' \
+  --set-string 'extraEnv[0].value=sk-...'
 ```
+
+The chart reads Redis connection details from the ConfigMap keys `REDIS_HOST` and `REDIS_PORT` (default port `6379`). Override them for your environment:
+
+```bash
+  --set config.redisHost=my-redis.default.svc.cluster.local \
+  --set config.redisPort=6379
+```
+
+> The default `values.yaml` leaves `REDIS_HOST` empty — the chart was originally wired to receive it from an ACK ElastiCache FieldExport. You must supply a real Redis host for the pod to start.
 
 The chart includes:
 - Horizontal Pod Autoscaler (1–4 replicas, CPU + memory metrics)
-- Ingress with TLS termination
-- ConfigMap-backed configuration
-- Health check probes with appropriate startup delays
+- Ingress with TLS termination (ALB annotations included; swap `ingress.className` for nginx/traefik)
+- ConfigMap-backed configuration with automatic pod rollout on config changes
+- Liveness and readiness probes with appropriate startup delays
 - Non-root, read-only filesystem security context
 
 See [`k8s/charts/docs-ai/values.yaml`](k8s/charts/docs-ai/values.yaml) for all options and [`k8s/environments/`](k8s/environments/) for example environment overrides.

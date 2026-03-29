@@ -13,7 +13,19 @@ _jinja_env = Environment(
     loader=FileSystemLoader(Path(__file__).parent / "prompts"),
     autoescape=False,  # Markdown prompts for LLM — not HTML, no escaping needed
 )
-_chat_template: Template = _jinja_env.get_template("chat_system.j2")
+
+
+def _load_template() -> Template:
+    if settings.docs_system_prompt_file:
+        path = Path(settings.docs_system_prompt_file)
+        if not path.is_file():
+            raise ValueError(f"DOCS_SYSTEM_PROMPT_FILE not found: {path}")
+        env = Environment(loader=FileSystemLoader(path.parent), autoescape=False)
+        return env.get_template(path.name)
+    return _jinja_env.get_template("chat_system.j2")
+
+
+_chat_template: Template = _load_template()
 
 
 @dataclass
@@ -38,6 +50,8 @@ def _system_prompt(ctx: RunContext[DocsDeps]) -> str:
         index_content=ctx.deps.index_content,
         current_page_slug=ctx.deps.current_page_slug,
         stateless=ctx.deps.stateless,
+        allowed_topics=settings.docs_allowed_topics,
+        custom_instructions=settings.docs_custom_instructions,
     )
 
 
@@ -51,8 +65,8 @@ def search_docs(ctx: RunContext[DocsDeps], query: str) -> str:
 def get_page(ctx: RunContext[DocsDeps], slug: str) -> str:
     """Get full content of a doc page by slug.
     Slugs are the URL path without the domain and without the .md extension.
-    e.g. https://kelet.ai/docs/concepts/sessions.md -> 'docs/concepts/sessions'
-         https://kelet.ai/pricing -> 'pricing'
+    e.g. https://example.com/docs/concepts/overview.md -> 'docs/concepts/overview'
+         https://example.com/pricing -> 'pricing'
     Use the index in your system prompt to identify the right slug.
     """
     content = ctx.deps.cache.get_page(slug)

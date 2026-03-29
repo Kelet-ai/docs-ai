@@ -93,8 +93,8 @@ readinessProbe:
 
 config:
   port: 8001
-  docsLlmsUrls: "https://kelet.ai/llms.txt"
-  docsAllowedHosts: ""  # space-separated hostnames/wildcards (e.g. "*.kelet.ai"); empty = auto-derive from docsLlmsUrls
+  docsLlmsUrls: ""  # required — set to your llms.txt URL(s), e.g. "https://yoursite.com/llms.txt"
+  docsAllowedHosts: ""  # space-separated hostnames/wildcards (e.g. "*.example.com"); empty = auto-derive from docsLlmsUrls
   docsAiModel: "bedrock:global.anthropic.claude-sonnet-4-6"
   docsRefreshIntervalSeconds: 3600
   rateLimitMessagesPerWindow: 20
@@ -105,4 +105,15 @@ config:
   # Leaving this empty disables proxy header trust — rate limit will use the pod network IP.
   uvicornForwardedAllowIps: ""  # override in environment values (e.g. prod.yaml)
   awsDefaultRegion: "eu-central-1"
+  # Topic restriction injected into the system prompt. Set to your product/org name (e.g. "MyProduct").
+  # Defaults to "scanned docs" — strictly refuses off-topic questions out of the box.
+  docsAllowedTopics: "scanned docs"
+  # Org-specific instructions appended to the base system prompt.
+  # Use for brand identity, product-specific recommendations, tone guidelines, etc.
+  # For multiline values, set this as a block scalar in your environment overlay (prod.yaml / stag.yaml),
+  # not here in values.yaml — the Helm `quote` filter requires a pre-flattened string.
+  docsCustomInstructions: ""
+  # Path to a custom Jinja2 template file that fully replaces the built-in system prompt.
+  # Mount via a ConfigMap volume and set this to the mounted path. Can also use {{ custom_instructions }} and {{ allowed_topics }}.
+  docsSystemPromptFile: ""
 

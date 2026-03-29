@@ -16,6 +16,9 @@ data:
   SESSION_TTL_SECONDS: {{ .Values.config.sessionTtlSeconds | quote }}
   UVICORN_FORWARDED_ALLOW_IPS: {{ .Values.config.uvicornForwardedAllowIps | quote }}
   AWS_DEFAULT_REGION: {{ .Values.config.awsDefaultRegion | quote }}
+  DOCS_ALLOWED_TOPICS: {{ .Values.config.docsAllowedTopics | quote }}
+  DOCS_CUSTOM_INSTRUCTIONS: {{ .Values.config.docsCustomInstructions | quote }}
+  DOCS_SYSTEM_PROMPT_FILE: {{ .Values.config.docsSystemPromptFile | quote }}
   # REDIS_HOST is populated at deploy time by an ACK FieldExport from the ElastiCache resource.
   # It must be set before the pod can connect to Redis.
   REDIS_HOST: ""
