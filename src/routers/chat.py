@@ -45,12 +45,15 @@ async def _run_agent_stream(
 
     async with kelet.agentic_session(session_id=session.session_id):
         if is_rephrase and settings.kelet_api_key:
-            await kelet.signal(
-                kind=kelet.SignalKind.FEEDBACK,
-                source=kelet.SignalSource.HUMAN,
-                trigger_name="user-correction",
-                score=0.0,
-            )
+            try:
+                await kelet.signal(
+                    kind=kelet.SignalKind.FEEDBACK,
+                    source=kelet.SignalSource.HUMAN,
+                    trigger_name="user-correction",
+                    score=0.0,
+                )
+            except Exception:
+                logger.warning("Failed to emit user-correction signal", exc_info=True)
 
         history_json: str | None = None
         try:

@@ -39,6 +39,8 @@ async def lifespan(app: FastAPI):
     finally:
         await docs_cache.stop()
         await redis.aclose()
+        if settings.kelet_api_key:
+            kelet.shutdown()  # flush BatchSpanProcessor before process exits
 
 
 app = FastAPI(title="Docs AI", lifespan=lifespan)
