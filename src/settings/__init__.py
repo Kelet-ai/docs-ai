@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     port: int = 8001
+    host: str = "0.0.0.0"
     redis_url: str | None = None  # if unset, falls back to in-memory (single-process, not persistent)
     docs_llms_urls: str = ""
     docs_allowed_hosts: str = ""

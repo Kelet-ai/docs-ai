@@ -1,6 +1,7 @@
 """FastAPI application — docs-ai service."""
 import logging
 from contextlib import asynccontextmanager
+from typing import cast
 
 import kelet
 from fakeredis.aioredis import FakeRedis as InMemoryRedis  # in-memory fallback; alias clarifies prod intent
@@ -64,3 +65,24 @@ async def health(request: Request):
     if not docs_cache.is_loaded:
         raise HTTPException(status_code=503, detail="docs not yet loaded")
     return {"status": "ok"}
+
+if __name__ == "__main__":
+    import os
+    import uvicorn
+    import argparse
+
+    if os.getenv("ENABLE_DEBUGPY") == "true":
+        import debugpy
+
+        debugpy.listen(
+            ("0.0.0.0", 5678)
+        )  # non-blocking; attach PyCharm/VS Code to port 5678
+
+    parser = argparse.ArgumentParser(description="Run the application")
+    parser.add_argument(
+        "--reload", action="store_true", help="Enable auto-reload", default=False
+    )
+    args = parser.parse_args()
+
+    logger.info(f"Running on {settings.host}:{settings.port}")
+    uvicorn.run("main:app", host=settings.host, port=settings.port, reload=args.reload)
