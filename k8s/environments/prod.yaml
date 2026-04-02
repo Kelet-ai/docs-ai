@@ -2,7 +2,7 @@ docs_ai:
   replicaCount: 1
   image:
     repository: kelet-docs-ai
-    tag: "ad8b3dc24d10b294450c22481be323e117a07c4b" # overwritten by CI with git SHA — never deploy this default
+    tag: "17b310531fa7ace8e4e6e19a1e6a104ed0ab3a3a" # overwritten by CI with git SHA — never deploy this default
   autoscaling:
     minReplicas: 1
     maxReplicas: 2
