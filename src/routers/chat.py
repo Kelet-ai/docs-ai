@@ -74,7 +74,7 @@ async def _run_agent_stream(
                                     yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
                                     node_emitted = True
                         if node_emitted:
-                            yield f"data: {json.dumps({'new_bubble': True})}\n\n"
+                            yield f"data: {json.dumps({'message_over': True})}\n\n"
                 if run.result is not None:
                     messages_json = run.result.all_messages_json().decode()
         except Exception:
