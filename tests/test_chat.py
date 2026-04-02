@@ -8,34 +8,56 @@ from fakeredis.aioredis import FakeRedis
 
 
 # --- Mock helpers ---
-class _MockStreamResult:
-    def __init__(self, chunks=("Hello", " world"), messages_json=b"[]"):
-        self._chunks = chunks
-        self._messages_json = messages_json
-
-    async def stream_text(self, delta=True):
-        for chunk in self._chunks:
-            yield chunk
-
-    def all_messages_json(self):
-        return self._messages_json
+from pydantic_ai import PartDeltaEvent, TextPartDelta
 
 
-class _MockRunResult:
+class _MockResult:
     output = "Hello world"
 
+    def all_messages_json(self):
+        return b"[]"
 
-def make_mock_run_stream(chunks=("Hello", " world"), raise_exc=None):
+
+class _MockNode:
+    def __init__(self, chunks):
+        self._chunks = chunks
+
+    def stream(self, ctx):
+        chunks = self._chunks
+
+        @asynccontextmanager
+        async def _stream():
+            async def _gen():
+                for chunk in chunks:
+                    yield PartDeltaEvent(index=0, delta=TextPartDelta(content_delta=chunk))
+            yield _gen()
+
+        return _stream()
+
+
+class _MockAgentRun:
+    def __init__(self, nodes, result):
+        self._nodes = iter(nodes)
+        self.result = result
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self._nodes)
+        except StopIteration:
+            raise StopAsyncIteration
+
+
+def make_mock_iter(chunks=("Hello", " world"), raise_exc=None):
     @asynccontextmanager
     async def _mock(*args, **kwargs):
         if raise_exc:
             raise raise_exc
-        yield _MockStreamResult(chunks)
+        node = _MockNode(chunks)
+        yield _MockAgentRun(nodes=[node], result=_MockResult())
     return _mock
-
-
-async def mock_run(*args, **kwargs):
-    return _MockRunResult()
 
 
 # --- Fixtures ---
@@ -60,8 +82,8 @@ async def client(redis, sample_cache, monkeypatch):
     # Bypass lifespan by setting state directly
     app.state.redis = redis
 
-    with patch("routers.chat.chat_agent.run_stream", new=make_mock_run_stream()), \
-         patch("routers.chat.chat_agent.run", new=mock_run):
+    with patch("routers.chat.chat_agent.iter", new=make_mock_iter()), \
+         patch("routers.chat.Agent.is_model_request_node", side_effect=lambda n: isinstance(n, _MockNode)):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             yield c
 
@@ -104,7 +126,8 @@ async def test_rate_limit_429(redis, sample_cache, monkeypatch):
     from app.main import app
     app.state.redis = redis
 
-    with patch("routers.chat.chat_agent.run_stream", new=make_mock_run_stream()):
+    with patch("routers.chat.chat_agent.iter", new=make_mock_iter()), \
+         patch("routers.chat.Agent.is_model_request_node", side_effect=lambda n: isinstance(n, _MockNode)):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             for _ in range(3):
                 r = await c.post("/chat", json={"message": "hi"})
@@ -146,7 +169,8 @@ async def test_agent_exception_yields_sse_error(redis, sample_cache, monkeypatch
     from app.main import app
     app.state.redis = redis
 
-    with patch("routers.chat.chat_agent.run_stream", new=make_mock_run_stream(raise_exc=RuntimeError("model error"))):
+    with patch("routers.chat.chat_agent.iter", new=make_mock_iter(raise_exc=RuntimeError("model error"))), \
+         patch("routers.chat.Agent.is_model_request_node", side_effect=lambda n: isinstance(n, _MockNode)):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             resp = await c.post("/chat", json={"message": "hi"})
             assert resp.status_code == 200
