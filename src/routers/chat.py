@@ -6,6 +6,7 @@ from typing import AsyncGenerator
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from pydantic_ai import Agent, PartDeltaEvent, TextPartDelta
 from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
 from redis.asyncio import Redis
 
@@ -33,23 +34,27 @@ async def _run_agent_stream(
     redis: Redis,
 ) -> AsyncGenerator[str, None]:
     """SSE generator with session persistence."""
-    history_json: str | None = None
+    messages_json: str | None = None
     try:
-        async with chat_agent.run_stream(
+        async with chat_agent.iter(
             message, deps=deps, message_history=message_history
-        ) as result:
-            async for chunk in result.stream_text(delta=True):
-                yield f"data: {json.dumps({'chunk': chunk})}\n\n"
-            history_json = result.all_messages_json().decode()
+        ) as run:
+            async for node in run:
+                if Agent.is_model_request_node(node):
+                    async with node.stream(run.ctx) as stream:
+                        async for event in stream:
+                            if isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+                                yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+            if run.result is not None:
+                messages_json = run.result.all_messages_json().decode()
     except Exception:
         logger.exception("Agent stream error")
-        # Partial chunks may already have been sent — client should treat any error event as terminal.
         yield f"data: {json.dumps({'error': 'An error occurred. Please try again.'})}\n\n"
         return
 
-    if history_json is not None:
+    if messages_json is not None:
         try:
-            session.history = history_json
+            session.history = messages_json
             await save_session(redis, session, settings.session_ttl_seconds)
         except Exception:
             logger.warning("Failed to persist session %s", session.session_id, exc_info=True)
@@ -78,8 +83,12 @@ async def chat_stateless(
         stateless=True,
     )
 
-    result = await chat_agent.run(q, deps=deps)
-    return PlainTextResponse(result.output)
+    async with chat_agent.iter(q, deps=deps) as run:
+        async for _ in run:
+            pass
+        result = run.result
+        output = result.output if result is not None else ""
+    return PlainTextResponse(output)
 
 
 @router.post("/chat", response_model=None)
