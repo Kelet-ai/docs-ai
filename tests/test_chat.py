@@ -8,7 +8,8 @@ from fakeredis.aioredis import FakeRedis
 
 
 # --- Mock helpers ---
-from pydantic_ai import PartDeltaEvent, TextPartDelta
+from pydantic_ai import PartDeltaEvent, PartStartEvent, TextPartDelta
+from pydantic_ai.messages import TextPart
 
 
 class _MockResult:
@@ -28,7 +29,9 @@ class _MockNode:
         @asynccontextmanager
         async def _stream():
             async def _gen():
-                for chunk in chunks:
+                first, *rest = chunks
+                yield PartStartEvent(index=0, part=TextPart(content=first))
+                for chunk in rest:
                     yield PartDeltaEvent(index=0, delta=TextPartDelta(content_delta=chunk))
             yield _gen()
 
