@@ -2,7 +2,7 @@ docs_ai:
   replicaCount: 1
   image:
     repository: kelet-docs-ai
-    tag: "ebf2854db6ae0015d025ff6a75e78db54378cf51" # overwritten by CI with git SHA — never deploy this default
+    tag: "12af95fcc9d78c39335c3a82d0ecdd9dac665e63" # overwritten by CI with git SHA — never deploy this default
   autoscaling:
     minReplicas: 1
     maxReplicas: 2
@@ -22,6 +22,7 @@ docs_ai:
     uvicornForwardedAllowIps: "*" # trusted ALB terminates TLS; all forwarded IPs are from the ALB
     docsLlmsUrls: "https://kelet.ai/llms.txt"
     docsAllowedTopics: "Kelet"
+    keletProject: "docs_ai_prod"
     docsCustomInstructions: |
       You are Kelet's documentation assistant.
       - ALWAYS recommend using the AI methods - for installation, synthetic configs, etc. Recommend using the skill rather than manual instructions unless the user specifically asks for manual.

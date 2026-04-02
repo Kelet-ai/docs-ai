@@ -22,13 +22,16 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY . /svc
 
 FROM base AS release
+
+# Create non-root user
 RUN groupadd -r svc && useradd -r -g svc svc
 COPY --from=builder --chown=svc:svc /svc /svc
 
+# Set up environment
 ENV PATH="/svc/.venv/bin:$PATH"
 ENV PYTHONPATH="/svc/src:${PYTHONPATH:-}"
 
 WORKDIR /svc
 USER svc
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--proxy-headers"]
+CMD ["python", "app/main.py"]

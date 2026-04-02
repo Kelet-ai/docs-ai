@@ -76,7 +76,10 @@ User types ≥ 2 chars in the site search dialog → an "Ask AI assistant" chip 
 ### Loading & Streaming
 - [ ] On send: immediately create assistant bubble with **3 small bouncing dots** (typing indicator)
 - [ ] On first chunk: replace dots with streamed text — no empty-bubble flash
+- [ ] On `{"message_over": true}`: seal the current bubble; show bouncing dots again while waiting for the next turn (tool is executing in the background)
+- [ ] On the next `{"chunk": ...}` after `message_over`: hide dots, open a new assistant bubble and start streaming into it
 - [ ] Accumulate raw text during streaming; render markdown **only after `[DONE]`** (not per-chunk)
+- [ ] Tables in assistant bubbles must be horizontally scrollable — never overflow the panel width
 - [ ] Auto-scroll to bottom as content arrives
 
 ### Input Behavior
@@ -136,6 +139,7 @@ POST /chat
 
   SSE events (blank line between each):
     data: {"chunk": "text delta"}
+    data: {"message_over": true}   ← current assistant turn ended; more content may follow after tool execution
     data: {"error": "error message"}
     data: [DONE]
 

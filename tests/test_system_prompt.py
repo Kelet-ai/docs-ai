@@ -6,7 +6,7 @@ from jinja2 import Environment, FileSystemLoader
 
 # --- Helpers ---
 
-_PROMPTS_DIR = Path(__file__).parent.parent / "src" / "prompts"
+_PROMPTS_DIR = Path(__file__).parent.parent / "src" / "agent" / "prompts"
 
 
 def render_base(

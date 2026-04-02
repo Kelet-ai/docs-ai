@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     port: int = 8001
+    host: str = "0.0.0.0"
     redis_url: str | None = None  # if unset, falls back to in-memory (single-process, not persistent)
     docs_llms_urls: str = ""
     docs_allowed_hosts: str = ""
@@ -15,6 +16,8 @@ class Settings(BaseSettings):
     docs_allowed_topics: str = "scanned docs"
     docs_custom_instructions: str = ""
     docs_system_prompt_file: str = ""
+    kelet_project: str = "docs_ai"
+    kelet_api_key: str | None = None
 
     @field_validator("docs_custom_instructions")
     @classmethod
