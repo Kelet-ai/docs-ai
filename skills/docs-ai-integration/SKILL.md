@@ -79,6 +79,7 @@ User types ≥ 2 chars in the site search dialog → an "Ask AI assistant" chip 
 - [ ] On `{"message_over": true}`: seal the current bubble; show bouncing dots again while waiting for the next turn (tool is executing in the background)
 - [ ] On the next `{"chunk": ...}` after `message_over`: hide dots, open a new assistant bubble and start streaming into it
 - [ ] Accumulate raw text during streaming; render markdown **only after `[DONE]`** (not per-chunk)
+- [ ] Tables in assistant bubbles must be horizontally scrollable — never overflow the panel width
 - [ ] Auto-scroll to bottom as content arrives
 
 ### Input Behavior
