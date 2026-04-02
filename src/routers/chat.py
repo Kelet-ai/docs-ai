@@ -6,8 +6,8 @@ from typing import AsyncGenerator
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent, PartDeltaEvent, TextPartDelta
-from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
+from pydantic_ai import Agent, PartDeltaEvent, PartStartEvent, TextPartDelta
+from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter, TextPart
 from redis.asyncio import Redis
 
 from agent import chat_agent, DocsDeps
@@ -41,10 +41,18 @@ async def _run_agent_stream(
         ) as run:
             async for node in run:
                 if Agent.is_model_request_node(node):
+                    node_emitted = False
                     async with node.stream(run.ctx) as stream:
                         async for event in stream:
-                            if isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+                            if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+                                if event.part.content:
+                                    yield f"data: {json.dumps({'chunk': event.part.content})}\n\n"
+                                    node_emitted = True
+                            elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
                                 yield f"data: {json.dumps({'chunk': event.delta.content_delta})}\n\n"
+                                node_emitted = True
+                    if node_emitted:
+                        yield f"data: {json.dumps({'message_over': True})}\n\n"
             if run.result is not None:
                 messages_json = run.result.all_messages_json().decode()
     except Exception:
