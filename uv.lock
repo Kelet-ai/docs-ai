@@ -549,7 +549,6 @@ dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "jinja2" },
-    { name = "kelet" },
     { name = "pydantic-ai" },
     { name = "pydantic-settings" },
     { name = "rank-bm25" },
@@ -573,7 +572,6 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "jinja2", specifier = ">=3.1" },
-    { name = "kelet", specifier = ">=1.3.0" },
     { name = "pydantic-ai", specifier = ">=1.0.15" },
     { name = "pydantic-settings", specifier = ">=2.6" },
     { name = "rank-bm25", specifier = ">=0.2.2" },
@@ -1281,21 +1279,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/19/74/a633ee74eb36c44aa6d1095e7cc5569bebf04342ee146178e2d36600708b/jsonschema_specifications-2025.9.1.tar.gz", hash = "sha256:b540987f239e745613c7a9176f3edb72b832a4ac465cf02712288397832b5e8d", size = 32855, upload-time = "2025-09-08T01:34:59.186Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/41/45/1a4ed80516f02155c51f51e8cedb3c1902296743db0bbc66608a0db2814f/jsonschema_specifications-2025.9.1-py3-none-any.whl", hash = "sha256:98802fee3a11ee76ecaca44429fda8a41bff98b00a0f2838151b113f210cc6fe", size = 18437, upload-time = "2025-09-08T01:34:57.871Z" },
-]
-
-[[package]]
-name = "kelet"
-version = "1.3.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "httpx" },
-    { name = "opentelemetry-exporter-otlp-proto-http" },
-    { name = "opentelemetry-sdk" },
-    { name = "pydantic" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/bc/b6/d7b18ddabac1c7a303ab887f7194122c7306dd500577dd6ffe297b4aba6a/kelet-1.3.0.tar.gz", hash = "sha256:aed4107b459d746746c22cd682f9a8141d2ca124e8c5230dbfa2bdf40b8d9d30", size = 342617, upload-time = "2026-03-23T03:46:26.425Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/5e/ed/78aaace7abb3b23aef8d5c5ca08728b57afde5702d6e1699911c4bbcec30/kelet-1.3.0-py3-none-any.whl", hash = "sha256:622f3a2735309bb19ae87d5479441277c8bd7d9372042f01349e8a600f706051", size = 24540, upload-time = "2026-03-23T03:46:25.402Z" },
 ]
 
 [[package]]

@@ -13,7 +13,6 @@ dependencies = [
     "httpx>=0.28",
     "rank-bm25>=0.2.2",
     "jinja2>=3.1",
-    "kelet>=1.3.0",
 ]
 
 [dependency-groups]
@@ -84,8 +83,4 @@ filterwarnings = [
 
 [tool.logfire]
 pydantic_plugin_record = "failure"
-
-[tool.uv.sources]
-kcommon = { git = "https://github.com/Kelet-ai/kelet", subdirectory = "common/python" }
-#kcommon = { path = "../common/python", editable = true } # for local development
 

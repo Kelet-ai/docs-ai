@@ -125,19 +125,6 @@ spec:
                   key: REDIS_PORT
             - name: REDIS_URL
               value: "rediss://$(REDIS_HOST):$(REDIS_PORT)"
-
-            # Kelet observability
-            - name: KELET_PROJECT
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "kelet-docs-ai.fullname" . }}-config
-                  key: KELET_PROJECT
-            - name: KELET_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.secrets.keletSecretName }}
-                  key: KELET_API_KEY
-                  optional: true
           volumeMounts:
             - name: tmp
               mountPath: /tmp

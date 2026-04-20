@@ -116,12 +116,3 @@ config:
   # Path to a custom Jinja2 template file that fully replaces the built-in system prompt.
   # Mount via a ConfigMap volume and set this to the mounted path. Can also use {{ custom_instructions }} and {{ allowed_topics }}.
   docsSystemPromptFile: ""
-  # Kelet project identifier — injected into the app and used to tag sessions in the Kelet dashboard.
-  # Override per environment (e.g. docs_ai_prod, docs_ai_stag).
-  keletProject: "docs_ai"
-
-secrets:
-  # Name of the Kubernetes Secret (created by the infra repo) that holds KELET_API_KEY.
-  # Must exist in the same namespace before the pod starts.
-  keletSecretName: "docs-ai-kelet"
-
