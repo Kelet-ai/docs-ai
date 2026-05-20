@@ -1,11 +1,26 @@
 docs_ai:
-  replicaCount: 1
+  replicaCount: 2
   image:
     repository: kelet-docs-ai
     tag: "1b48d105b3d698bce03b0fae371bf9f0f224944d" # overwritten by CI with git SHA — never deploy this default
   autoscaling:
-    minReplicas: 1
-    maxReplicas: 2
+    minReplicas: 2
+    maxReplicas: 3
+  podDisruptionBudget:
+    enabled: true
+    maxUnavailable: 1
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - kelet-docs-ai
+            topologyKey: kubernetes.io/hostname
   ingress:
     annotations:
       external-dns.alpha.kubernetes.io/hostname: "docs-ai.kelet.ai"

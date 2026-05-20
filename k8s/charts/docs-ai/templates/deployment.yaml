@@ -45,6 +45,9 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           env:
+            # Stream Python stdout/stderr unbuffered so logs survive SIGKILL/eviction.
+            - name: PYTHONUNBUFFERED
+              value: "1"
             # Configuration from ConfigMap
             - name: PORT
               valueFrom:
