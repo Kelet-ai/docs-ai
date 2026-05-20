@@ -73,6 +73,14 @@ nodeSelector:
 tolerations: []
 affinity: {}
 
+# Pod Disruption Budget
+# Match workflows/server pattern; protect against zero-replica disruption windows.
+# Use maxUnavailable so Karpenter can always evict 1 pod for consolidation
+# (minAvailable wedged evictions during the 2026-05-19 cluster pressure incident).
+podDisruptionBudget:
+  enabled: false
+  maxUnavailable: 1
+
 livenessProbe:
   httpGet:
     path: /health

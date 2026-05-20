@@ -30,6 +30,7 @@ COPY --from=builder --chown=svc:svc /svc /svc
 # Set up environment
 ENV PATH="/svc/.venv/bin:$PATH"
 ENV PYTHONPATH="/svc/src:${PYTHONPATH:-}"
+ENV PYTHONUNBUFFERED=1
 
 WORKDIR /svc
 USER svc
